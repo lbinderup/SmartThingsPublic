@@ -146,7 +146,7 @@ private parseAttrMessage(description) {
 	descMap.additionalAttrs.each {
 		attrData << [cluster: descMap.clusterInt, attribute: it.attrInt, value: it.value]
 	}
-	attrData.each {
+	attrData.findAll( {it.value != null} ).each {
 		def map = [:]
 		if (it.cluster == THERMOSTAT_CLUSTER) {
 			if (it.attribute == LOCAL_TEMPERATURE) {
@@ -451,6 +451,17 @@ def setHeatingSetpoint(degrees) {
 	if (degrees != null) {
 		def celsius = (temperatureScale == "C") ? degrees : fahrenheitToCelsius(degrees)
 		celsius = (celsius as Double).round(2)
+
+		// The LUX KONOz is designed around Farenheit and doesn't show decimal temperatures.
+		// The lowest supported heating setpoint is 45F which is 7.22C. It displays 7C. We round
+		// 7.22C elsewhere to 7C. So, we want to check to make sure if the user sets 7C we send 7.22C.
+		// Same for the upper bounds of the heating setpoint.
+		if (celsius < heatingSetpointRange[0]) {
+			celsius = heatingSetpointRange[0]
+		} else if (celsius > heatingSetpointRange[1]) {
+			celsius = heatingSetpointRange[1]
+		}
+
 		return zigbee.writeAttribute(THERMOSTAT_CLUSTER, HEATING_SETPOINT, DataType.INT16, hex(celsius * 100)) +
 				zigbee.readAttribute(THERMOSTAT_CLUSTER, HEATING_SETPOINT)
 	}
@@ -473,7 +484,7 @@ def getCoolingSetpointRange() {
 	(getTemperatureScale() == "C") ? [10, 35] : [50, 95]
 }
 def getHeatingSetpointRange() {
-	(getTemperatureScale() == "C") ? [7, 32] : [45, 90]
+	(getTemperatureScale() == "C") ? [7.22, 32.22] : [45, 90]
 }
 
 private getTHERMOSTAT_CLUSTER() { 0x0201 }
